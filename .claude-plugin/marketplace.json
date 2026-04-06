@@ -1,0 +1,20 @@
+{
+  "name": "jp-plugins",
+  "owner": {
+    "name": "JP"
+  },
+  "plugins": [
+    {
+      "name": "ich-plugin",
+      "source": "./plugins/ich-plugin",
+      "description": "ich-plugin 스킬을 추가합니다",
+      "version": "1.0.0"
+    },
+    {
+      "name": "personal-plugin",
+      "source": "./plugins/personal-plugin",
+      "description": "personal-plugin 스킬을 추가합니다",
+      "version": "1.0.0"
+    }
+  ]
+}
