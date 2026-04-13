@@ -1,33 +1,104 @@
 ---
 name: ich-pr-message
-description: 최근 커밋 내용을 기반으로 PR 메시지를 영문/한글로 생성
-disable-model-invocation: true
+description: 최근 커밋 내용을 기반으로 PR 메시지를 영문/한글로 생성. 사용자가 모델을 선택할 수 있다.
 ---
 
-# Dynamic Context
+# Step 0: 모델 선택
 
-```shell
-!git log --oneline -20
+스킬 실행 전에 AskUserQuestion 도구로 사용할 모델을 입력받는다:
+
+```
+PR 메시지 생성에 사용할 모델을 선택하세요:
+
+[Claude 모델]
+  1. opus   — 가장 정밀한 분석
+  2. sonnet — 균형 잡힌 성능 (기본값)
+  3. haiku  — 빠른 응답 (가벼운 작업용)
+
+[LM Studio]
+  4. lmstudio — LM Studio에 현재 로드된 모델 사용 (localhost:1234)
+
+번호 또는 모델명을 입력하세요. (기본값: 2/sonnet)
 ```
 
-```shell
-!git branch --show-current
+- 사용자가 값을 입력하지 않거나 빈 값이면 기본값 **sonnet**을 사용한다.
+- `lmstudio` 선택 시, Bash 도구로 연결을 확인한다:
+  ```bash
+  curl -s --max-time 10 http://localhost:1234/v1/models
+  ```
+  - 응답 실패 시 사용자에게 알리고 모델을 다시 선택하도록 한다.
+  - 정상 응답이면 로드된 모델명을 `{LMSTUDIO_MODEL}`에 저장한다.
+- 이후 이 값을 `{MODEL}`로 참조한다.
+
+# Step 1: 컨텍스트 수집
+
+Bash 도구로 다음 2개 명령을 **병렬로** 실행하여 git 컨텍스트를 수집한다:
+
+```bash
+git log --oneline -20
 ```
 
-# Instructions
+```bash
+git branch --show-current
+```
+
+# Step 2: 사용자 확인
 
 최근 커밋 목록을 기반으로 PR 메시지를 생성합니다.
 
 ## 절차
 
-1. **커밋 범위 확인**: 위의 git log를 사용자에게 보여주고, PR에 포함할 커밋 범위를 확인합니다. (예: "최근 5개 커밋을 포함할까요?" 또는 특정 커밋 해시 범위)
+1. **커밋 범위 확인**: Step 1의 git log를 사용자에게 보여주고, PR에 포함할 커밋 범위를 확인합니다. (예: "최근 5개 커밋을 포함할까요?" 또는 특정 커밋 해시 범위)
 2. **이슈 번호 확인**: Resolve할 GitHub 이슈 번호가 있는지 사용자에게 물어봅니다. (예: "Resolve할 이슈 번호가 있나요?")
 3. **그 외 요청사항 확인**: PR 메시지 작성 시 추가로 포함하거나 제외할 내용이 있는지 사용자에게 물어봅니다. (예: "그 외 PR 메시지에 반영할 요청사항이 있나요?")
 4. **커밋 분석**: 사용자가 확인한 범위의 커밋들을 반드시 아래 두 가지 모두 실행하여 분석합니다:
    - `git log --stat <range>` — 커밋 메시지와 변경 파일 목록 확인
    - `git diff <base>...<head>` — **실제 코드 변경 내용을 반드시 읽고 분석**해야 합니다. 커밋 메시지만으로 PR 메시지를 작성하지 마세요.
-5. **PR 메시지 생성**: 아래 템플릿에 맞춰 **영문**으로 작성합니다. 3단계에서 받은 요청사항을 반영합니다.
-6. **한글 번역**: 영문 내용을 한글로 번역하여 함께 제공합니다.
+
+# Step 3: PR 메시지 생성
+
+사용자 확인이 완료되면, 수집된 컨텍스트와 커밋 분석 결과를 기반으로 PR 메시지를 생성한다.
+
+### 모델별 실행 방식
+
+#### Claude 모델 (opus / sonnet / haiku)
+
+Agent 도구를 사용한다:
+
+```
+Agent({
+  description: "PR 메시지 생성",
+  subagent_type: "general-purpose",
+  model: "{MODEL}",
+  prompt: "{커밋 분석 결과 + 사용자 요청사항 + 아래 PR 메시지 생성 지침}"
+})
+```
+
+#### LM Studio 모델 (lmstudio)
+
+Bash 도구로 OpenAI 호환 API를 호출한다. **타임아웃은 5분(300초)**으로 설정한다:
+
+```bash
+curl -s --max-time 300 http://localhost:1234/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "{LMSTUDIO_MODEL}",
+    "messages": [
+      {"role": "system", "content": "당신은 PR 메시지를 영문/한글로 생성하는 전문가입니다."},
+      {"role": "user", "content": "{커밋 분석 결과 + 사용자 요청사항 + 아래 PR 메시지 생성 지침}"}
+    ],
+    "temperature": 0.3,
+    "max_tokens": 4096
+  }'
+```
+
+- Bash 도구의 `timeout` 파라미터도 **300000ms**(5분)로 설정한다.
+- 응답의 `.choices[0].message.content`를 결과로 사용한다.
+- 응답 실패 시 사용자에게 알리고 중단한다.
+
+### PR 메시지 생성 지침
+
+아래 템플릿에 맞춰 **영문**으로 작성한 후, 한글로 번역하여 함께 제공합니다. 사용자의 요청사항을 반영합니다.
 
 ## 중요
 

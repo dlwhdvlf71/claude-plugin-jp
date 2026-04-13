@@ -1,24 +1,93 @@
 ---
 name: ich-commit-message
-description: 최근 작업 내용을 기반으로 Conventional Commits 스펙에 맞는 커밋 메시지를 생성
-disable-model-invocation: true
+description: 최근 작업 내용을 기반으로 Conventional Commits 스펙에 맞는 커밋 메시지를 생성. 사용자가 모델을 선택할 수 있다.
 ---
 
-# Dynamic Context
+# Step 0: 모델 선택
 
-```shell
-!git diff --cached
+스킬 실행 전에 AskUserQuestion 도구로 사용할 모델을 입력받는다:
+
+```
+커밋 메시지 생성에 사용할 모델을 선택하세요:
+
+[Claude 모델]
+  1. opus   — 가장 정밀한 분석
+  2. sonnet — 균형 잡힌 성능 (기본값)
+  3. haiku  — 빠른 응답 (가벼운 작업용)
+
+[LM Studio]
+  4. lmstudio — LM Studio에 현재 로드된 모델 사용 (localhost:1234)
+
+번호 또는 모델명을 입력하세요. (기본값: 2/sonnet)
 ```
 
-```shell
-!git diff
+- 사용자가 값을 입력하지 않거나 빈 값이면 기본값 **sonnet**을 사용한다.
+- `lmstudio` 선택 시, Bash 도구로 연결을 확인한다:
+  ```bash
+  curl -s --max-time 10 http://localhost:1234/v1/models
+  ```
+  - 응답 실패 시 사용자에게 알리고 모델을 다시 선택하도록 한다.
+  - 정상 응답이면 로드된 모델명을 `{LMSTUDIO_MODEL}`에 저장한다.
+- 이후 이 값을 `{MODEL}`로 참조한다.
+
+# Step 1: 컨텍스트 수집
+
+Bash 도구로 다음 3개 명령을 **병렬로** 실행하여 git 컨텍스트를 수집한다:
+
+```bash
+git diff --cached
 ```
 
-```shell
-!git status --short
+```bash
+git diff
 ```
 
-# Instructions
+```bash
+git status --short
+```
+
+# Step 2: 커밋 메시지 생성
+
+수집한 git diff와 status 정보를 기반으로 커밋 메시지를 생성한다.
+
+### 모델별 실행 방식
+
+#### Claude 모델 (opus / sonnet / haiku)
+
+Agent 도구를 사용한다:
+
+```
+Agent({
+  description: "커밋 메시지 생성",
+  subagent_type: "general-purpose",
+  model: "{MODEL}",
+  prompt: "{Step 1 결과} + {아래 커밋 메시지 생성 지침}"
+})
+```
+
+#### LM Studio 모델 (lmstudio)
+
+Bash 도구로 OpenAI 호환 API를 호출한다. **타임아웃은 5분(300초)**으로 설정한다:
+
+```bash
+curl -s --max-time 300 http://localhost:1234/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "{LMSTUDIO_MODEL}",
+    "messages": [
+      {"role": "system", "content": "당신은 Conventional Commits 스펙에 맞는 커밋 메시지를 생성하는 전문가입니다."},
+      {"role": "user", "content": "{Step 1 결과} + {아래 커밋 메시지 생성 지침}"}
+    ],
+    "temperature": 0.3,
+    "max_tokens": 2048
+  }'
+```
+
+- Bash 도구의 `timeout` 파라미터도 **300000ms**(5분)로 설정한다.
+- 응답의 `.choices[0].message.content`를 결과로 사용한다.
+- 응답 실패 시 사용자에게 알리고 중단한다.
+
+### 커밋 메시지 생성 지침
 
 위의 git diff와 status 정보를 분석하여 **Conventional Commits** 스펙에 맞는 커밋 메시지를 생성하세요.
 
