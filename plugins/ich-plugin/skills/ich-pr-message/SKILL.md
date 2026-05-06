@@ -49,7 +49,9 @@ git branch --show-current
 ## 절차
 
 1. **커밋 범위 확인**: Step 1의 git log를 사용자에게 보여주고, PR에 포함할 커밋 범위를 확인합니다. (예: "최근 5개 커밋을 포함할까요?" 또는 특정 커밋 해시 범위)
-2. **이슈 번호 확인**: Resolve할 GitHub 이슈 번호가 있는지 사용자에게 물어봅니다. (예: "Resolve할 이슈 번호가 있나요?")
+2. **이슈 번호 확인**: Resolve할 GitHub 이슈 번호가 있는지 사용자에게 물어봅니다. **여러 개일 경우 쉼표 또는 공백으로 구분하여 입력받을 수 있습니다.** (예: "Resolve할 이슈 번호가 있나요? 여러 개면 `123, 124, 125`처럼 입력해 주세요. 없으면 `없음` 또는 빈 값으로 응답하세요.")
+   - 사용자가 이슈 번호를 입력하지 않거나 "없음", "no", 빈 값으로 응답하면 **Resolves 항목은 절대 추가하지 않습니다.** (임의로 이슈 번호를 추측하거나 생성하지 마세요.)
+   - 사용자가 입력한 이슈 번호만을 정확히 사용합니다.
 3. **그 외 요청사항 확인**: PR 메시지 작성 시 추가로 포함하거나 제외할 내용이 있는지 사용자에게 물어봅니다. (예: "그 외 PR 메시지에 반영할 요청사항이 있나요?")
 4. **커밋 분석**: 사용자가 확인한 범위의 커밋들을 반드시 아래 두 가지 모두 실행하여 분석합니다:
    - `git log --stat <range>` — 커밋 메시지와 변경 파일 목록 확인
@@ -103,7 +105,9 @@ curl -s --max-time 300 http://localhost:1234/v1/chat/completions \
 ## 중요
 
 - **반드시 커밋 범위를 사용자에게 먼저 확인**한 후 진행하세요.
-- **커밋 범위 확인 후, 이슈 번호를 물어보세요.** 이슈 번호가 있으면 Description 본문에 자연스럽게 `Resolve #번호`를 포함합니다. (예: "... Resolve #6")
+- **커밋 범위 확인 후, 이슈 번호를 물어보세요.**
+  - **이슈 번호가 있는 경우에만**: Description 본문(서술)을 먼저 작성한 뒤, 본문 아래에 한 줄 띄우고 `- Resolves #번호` 형식의 불릿 리스트로 추가합니다. 여러 개면 각각 별도의 줄에 `- Resolves #번호`를 작성합니다.
+  - **이슈 번호가 없는 경우**: Resolves 줄을 **절대로 출력하지 마세요.** 빈 `- Resolves #` 라인이나 placeholder, 추측한 이슈 번호도 작성하지 않습니다. Description 본문 서술만 출력합니다.
 - PR 메시지만 제안하고, 실제 PR 생성은 실행하지 마세요.
 - 사용자가 복사할 수 있도록 코드 블록으로 감싸서 제공하세요.
 
@@ -116,7 +120,12 @@ curl -s --max-time 300 http://localhost:1234/v1/chat/completions \
 ```markdown
 ## Description
 
-{변경 내용 영문 서술. Resolve 이슈가 있으면 자연스럽게 포함}
+{변경 내용 영문 서술}
+
+{⚠️ 사용자가 이슈 번호를 제공한 경우에만 아래 Resolves 블록을 출력합니다. 이슈 번호가 없으면 빈 줄과 아래 블록 전체를 모두 생략하고 Description 본문 서술만 남깁니다.}
+- Resolves #{issue_number_1}
+- Resolves #{issue_number_2}
+- Resolves #{issue_number_N}
 
 ## Pull request checklist
 
@@ -165,7 +174,7 @@ curl -s --max-time 300 http://localhost:1234/v1/chat/completions \
 ### 2단계: 영문 PR 메시지
 
 위 PR 템플릿을 채워서 마크다운 코드 블록으로 제공합니다.
-- Description: 변경 내용을 명확하게 영문으로 작성
+- Description: 변경 내용을 명확하게 영문으로 작성. **사용자가 이슈 번호를 제공한 경우에만** 본문 아래에 한 줄 띄운 뒤 `- Resolves #번호` 형식의 불릿 리스트로 각 이슈를 별도의 줄에 추가. **이슈 번호가 없으면 Resolves 줄을 절대 출력하지 않음** (빈 placeholder나 추측한 번호도 금지)
 - Pull request checklist: 해당하는 항목에 `[x]` 체크
 - Pull request type: 해당하는 타입에 `[x]` 체크
 - What is the current behavior: PR 이전 상태/문제점 영문 서술
