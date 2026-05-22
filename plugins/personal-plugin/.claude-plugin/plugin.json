@@ -1,8 +1,16 @@
 {
   "name": "personal-plugin",
   "description": "personal-plugin은 개인적으로 만든 skill, Agents, etc를 모아놓은 plugin입니다.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": {
     "name": "JP"
-  }
+  },
+  "recommended_plugins": [
+    {
+      "name": "obsidian",
+      "repo": "kepano/obsidian-skills",
+      "required_by": ["llm-wiki"],
+      "reason": "llm-wiki 스킬은 정확한 Obsidian 호환 출력(wikilinks, frontmatter, callouts, .base, .canvas)을 보장하기 위해 obsidian-skills의 obsidian-markdown, defuddle, json-canvas, obsidian-bases, obsidian-cli 스킬을 참조한다."
+    }
+  ]
 }
